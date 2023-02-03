@@ -1,0 +1,2 @@
+(ab|aab|aba|bb|b)*(a|aa)?
+(b*a?a?b)*(a|aa)?
