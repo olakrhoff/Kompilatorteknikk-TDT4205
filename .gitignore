@@ -1,3 +1,5 @@
 .DS_Store
 ALSUdragonbookcompilers.pdf
 *.tar.gz
+CMakeLists.txt
+cmake-*

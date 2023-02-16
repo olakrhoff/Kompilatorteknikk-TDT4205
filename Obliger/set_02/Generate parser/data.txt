@@ -1,0 +1,29 @@
+program global_list
+global_list global | global_list global
+global_function | declaration | array_declaration
+declaration VAR variable_list
+variable_list identifier | variable_list ',' identifier
+array_declaration VAR array_indexing
+array_indexing identifier '[' expression ']'
+function FUNC identifier '(' parameter_list ')' statement
+parameter_list variable_list | ε
+statement assignment_statement | return_statement | print_statement | if_statement | while_statement | for_statement | break_statement | block
+block BEGIN declaration_list statement_list END | BEGIN statement_list END
+declaration_list declaration | declaration_list declaration
+statement_list statement | statement_list statement
+assignment_statement identifier ':' '=' expression | array indexing ':' '=' expression
+return_statement RETURN expression
+print_statement PRINT print_list
+print_list print_item | print_list ',' print_item
+print_item expression | string
+break_statement BREAK
+if_statement IF relation THEN statement | IF relation THEN statement ELSE statement
+while_statement WHILE relation DO statement
+relation expression '=' expression | expression '!' '=' expression | expression '<' expression | expression '>' expression
+for_statement FOR identifier IN expression '.' '.' expression DO statement
+expression expression '+' expression | expression '-' expression | expression '*' expression | expression '/' expression | '-' expression | '(' expression ')' | number | identifier | array_indexing | identifier '(' argument_list ')'
+expression_list expression | expression_list ',' expression
+argument_list expression_list | ε
+identifier IDENTIFIER
+number NUMBER
+string STRING
