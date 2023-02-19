@@ -4,3 +4,4 @@ ALSUdragonbookcompilers.pdf
 CMakeLists.txt
 cmake-*
 *.o
+.idea
