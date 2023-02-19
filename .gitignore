@@ -3,3 +3,4 @@ ALSUdragonbookcompilers.pdf
 *.tar.gz
 CMakeLists.txt
 cmake-*
+*.o
