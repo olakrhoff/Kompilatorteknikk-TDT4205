@@ -1,6 +1,7 @@
 src/parser.c
 src/scanner.c
 src/vslc
+src/vslc.o
 src/y.tab.h
 *.ast
 *.svg
