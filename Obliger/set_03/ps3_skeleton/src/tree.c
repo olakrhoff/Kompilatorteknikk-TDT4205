@@ -126,6 +126,8 @@ static node_t *simplify_tree(node_t *node)
         // For nodes that only serve as a wrapper for a (optional) node below,
         // you may squash the child and take over its children instead.
     
+        //For the cases left empty I did not see any reason to do anything with these nodes.
+        //It would only remove understanding from the tree. Most of them are wrappers for identifiers.
         case PROGRAM:
             return delete_parent(node);
         case GLOBAL_LIST:
@@ -159,7 +161,7 @@ static node_t *simplify_tree(node_t *node)
         case RETURN_STATEMENT:
             break;
         case PRINT_STATEMENT:
-            if (node->children[0]->data != NULL)
+            if (node->children[0]->data != NULL) //We only want to squash the child if it has no data.
                 return node;
             return squash_child(node);
         case PRINT_LIST:
@@ -212,7 +214,7 @@ static node_t *simplify_tree(node_t *node)
     node_t *variable_name = malloc(sizeof(node_t));     \
     node_init(variable_name, __VA_ARGS__)
 // After an IDENTIFIER_NODE has been added to the tree, it can't be added again
-// This macro replaces the given variable with a new node, containting a copy of the data
+// This macro replaces the given variable with a new node, containing a copy of the data
 #define DUPLICATE_VARIABLE(variable) do {                    \
         char *identifier = strdup(variable->data);           \
         variable = malloc(sizeof(node_t));                   \
@@ -287,6 +289,9 @@ static node_t *replace_for_statement(node_t *for_node)
     node_t *end_value = for_node->children[2];
     node_t *body = for_node->children[3];
     
+    
+    node_finalize(for_node); //We can safely finalize this node now that we have copied the data we need from it.
+    
     // TODO: Task 2.4
     // Replace the FOR_STATEMENT node, by instead creating the syntax tree of an equivalent block with a while-statement
     // As an example, the following statement:
@@ -311,6 +316,8 @@ static node_t *replace_for_statement(node_t *for_node)
     // As an example, the following creates the
     // var <variable>, __FOR_END__
     // part of the transformation
+    //
+    //     var i, __FOR_END__
     NODE (end_variable, IDENTIFIER_DATA, strdup(FOR_END_VARIABLE), 0);
     NODE (variable_list, VARIABLE_LIST, NULL, 2, variable, end_variable);
     NODE (declaration, DECLARATION, NULL, 1, variable_list);
@@ -319,18 +326,92 @@ static node_t *replace_for_statement(node_t *for_node)
     // An important thing to note, is that nodes may not be re-used
     // since that will cause errors when freeing up the syntax tree later.
     // because we want to use a lot of IDENTIFIER_DATA nodes with the same data, we have the macro
+    //
+    //     i := 5
     DUPLICATE_VARIABLE (variable);
     // Now we can use <variable> again, and it will be a new node for the same identifier!
     NODE (init_assignment, ASSIGNMENT_STATEMENT, NULL, 2, variable, start_value);
     // We do the same whenever we want to reuse <end_variable> as well
+    //
+    //     __FOR_END__ := N+1
     DUPLICATE_VARIABLE (end_variable);
     NODE (end_assignment, ASSIGNMENT_STATEMENT, NULL, 2, end_variable, end_value);
     
     // TODO: The rest is up to you. Good luck!
     // Don't fret if this part gets too cumbersome. Try your best
     
+    //Now for the actual while-loop
+    //
+    //     while i < __FOR_END__ begin
+    //         print a[i]
+    //         i := i + 1
+    //     end
+    
+    //Since we are constructing this bottom-up, since we need the child
+    //nodes when creating the parents, we must begin at the bottom of the
+    //tree and construct our way up.
+    
+    //The last thing to happen is the incrementation of the variable
+    //         i + 1
+    int64_t *increment = malloc(sizeof(int64_t *));
+    *increment = 1;
+    NODE(increment_value, NUMBER_DATA, increment, 0);
+    DUPLICATE_VARIABLE(variable);
+    NODE(increment_expression, EXPRESSION, strdup("+"), 2, variable, increment_value);
+    
+    //         i := i + 1
+    DUPLICATE_VARIABLE(variable);
+    NODE(increment_assignment, ASSIGNMENT_STATEMENT, NULL, 2, variable, increment_expression);
+    
+    //Now to bind the statements in the body of the while together
+    //         print a[i]
+    //         i := i + 1
+    NODE(while_body, STATEMENT_LIST, NULL, 2, body, increment_assignment);
+    
+    //Now we need to place the body in a block
+    //     begin
+    //         print a[i]
+    //         i := i + 1
+    //     end
+    NODE(while_block, BLOCK, NULL, 1, while_body);
+    
+    //Now we need the relation check in the while-loop
+    //i < __FOR_END__
+    DUPLICATE_VARIABLE(variable);
+    DUPLICATE_VARIABLE(end_variable);
+    NODE(while_relation, RELATION, strdup("<"), 2, variable, end_variable);
+    
+    //Now we can bind the relation and block together to complete the while statement
+    //     while i < __FOR_END__ begin
+    //         print a[i]
+    //         i := i + 1
+    //     end
+    NODE(while_statment, WHILE_STATEMENT, NULL, 2, while_relation, while_block);
+    
+    //Now we need to bind all the steps into a statement list
+    //     i := 5                         : init_assignment
+    //     __FOR_END__ := N+1             : end_assignment
+    //     while i < __FOR_END__ begin    : while_statement
+    //         print a[i]                 : ------||------
+    //         i := i + 1                 : ------||------
+    //     end                            : ------||------
+    NODE(complete_while_logic, STATEMENT_LIST, NULL, 3, init_assignment, end_assignment, while_statment);
+    
+    //Lastly, we need to bind the declaration of the variables and the logic together in a block
+    // begin
+    //     var i, __FOR_END__
+    //     i := 5
+    //     __FOR_END__ := N+1
+    //     while i < __FOR_END__ begin
+    //         print a[i]
+    //         i := i + 1
+    //     end
+    // end
+    NODE(while_node, BLOCK, NULL, 2, declaration_list, complete_while_logic);
+    
+    
     // TODO: Instead of returning the original for_node, destroy it, and return your equivalent block
-    return for_node;
+    return while_node;
 }
 
 static node_t *delete_parent(node_t *parent)
