@@ -1,6 +1,9 @@
-.globl main
+.set _main, main
+.globl _main
+.set printf, _printf
+.set putchar, _putchar
 
-.section .rodata
+.section __TEXT, __cstring
 intro: .string "On day %ld of Christmas my true love sent to me\n"
 and_s: .string "and "
 
@@ -21,7 +24,7 @@ lines:
     .quad str01, str02, str03, str04, str05, str06
     .quad str07, str08, str09, str10, str11, str12
 
-.section .text
+.section __TEXT, __text
 main:
     pushq %rbp
     movq %rsp, %rbp
@@ -68,6 +71,7 @@ main:
 
         ...
     */
+
 
     leave
     ret

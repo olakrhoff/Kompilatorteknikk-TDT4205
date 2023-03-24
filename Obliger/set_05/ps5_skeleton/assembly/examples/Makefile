@@ -1,6 +1,6 @@
 .PHONY: all
 
-SRCS = $(wildcard *.s)
+SRCS = $(wildcard hello.s)
 
 BINS = $(patsubst %.s,%,$(SRCS))
 
@@ -10,4 +10,4 @@ clean:
 	rm $(BINS)
 
 %: %.s
-	$(CC) -no-pie $< -o $@
+	$(CC) $< -o $@
