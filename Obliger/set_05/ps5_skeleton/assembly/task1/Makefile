@@ -10,4 +10,4 @@ clean:
 	rm $(BINS)
 
 %: %.s
-	$(CC) -no-pie $< -o $@
+	$(CC) $< -o $@

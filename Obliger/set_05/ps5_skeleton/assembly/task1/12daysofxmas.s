@@ -1,31 +1,30 @@
-.set _main, main
 .globl _main
-.set printf, _printf
-.set putchar, _putchar
 
 .section __TEXT, __cstring
-intro: .string "On day %ld of Christmas my true love sent to me\n"
-and_s: .string "and "
+_intro: .string "On day %ld of Christmas my true love sent to me\n"
+_and_s: .string "and "
 
-str01: .string "%ld partridge in a pear tree\n"
-str02: .string "%ld turtle doves\n"
-str03: .string "%ld french hens\n"
-str04: .string "%ld calling birds\n"
-str05: .string "%ld gold rings\n"
-str06: .string "%ld geese a-laying\n"
-str07: .string "%ld swans a-swimming\n"
-str08: .string "%ld maids a-milking\n"
-str09: .string "%ld ladies dancing\n"
-str10: .string "%ld lords a-leaping\n"
-str11: .string "%ld pipers piping\n"
-str12: .string "%ld drummers drumming\n"
+_str01: .string "%ld partridge in a pear tree\n"
+_str02: .string "%ld turtle doves\n"
+_str03: .string "%ld french hens\n"
+_str04: .string "%ld calling birds\n"
+_str05: .string "%ld gold rings\n"
+_str06: .string "%ld geese a-laying\n"
+_str07: .string "%ld swans a-swimming\n"
+_str08: .string "%ld maids a-milking\n"
+_str09: .string "%ld ladies dancing\n"
+_str10: .string "%ld lords a-leaping\n"
+_str11: .string "%ld pipers piping\n"
+_str12: .string "%ld drummers drumming\n"
+_skip_line: .string "\n"
 
-lines:
-    .quad str01, str02, str03, str04, str05, str06
-    .quad str07, str08, str09, str10, str11, str12
+#MacOS does NOT like this part
+#_lines:
+ #   .quad _str01, _str02, _str03, _str04, _str05, _str06
+  #  .quad _str07, _str08, _str09, _str10, _str11, _str12
 
 .section __TEXT, __text
-main:
+_main:
     pushq %rbp
     movq %rsp, %rbp
 
@@ -71,7 +70,122 @@ main:
 
         ...
     */
+    
+    movq $0, %r12 # Set outer counter
+    start_loop:
+    inc %r12
+    movq $12, %r13 # Inner counter
+    movq %r12, %rsi
+    leaq _intro(%rip), %rdi # Set arg 1
+    call _printf
 
+    # Jump to the correct start of listing
+    cmp %r13, %r12
+    jz num12
+    dec %r13
+    cmp %r13, %r12
+    jz num11
+    dec %r13
+    cmp %r13, %r12
+    jz num10
+    dec %r13
+    cmp %r13, %r12
+    jz num9
+    dec %r13
+    cmp %r13, %r12
+    jz num8
+    dec %r13
+    cmp %r13, %r12
+    jz num7
+    dec %r13
+    cmp %r13, %r12
+    jz num6
+    dec %r13
+    cmp %r13, %r12
+    jz num5
+    dec %r13
+    cmp %r13, %r12
+    jz num4
+    dec %r13
+    cmp %r13, %r12
+    jz num3
+    dec %r13
+    cmp %r13, %r12
+    jz num2
+    dec %r13
+    jmp num1
 
+    # Print all days from the day that is jump to by label above
+    num12:
+    leaq _str12(%rip), %rdi
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num11:
+    leaq _str11(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num10:
+    leaq _str10(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num9:
+    leaq _str09(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num8:
+    leaq _str08(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num7:
+    leaq _str07(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num6:
+    leaq _str06(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num5:
+    leaq _str05(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num4:
+    leaq _str04(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num3:
+    leaq _str03(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num2:
+    leaq _str02(%rip), %rdi 
+    movq %r13, %rsi
+    call _printf
+    dec %r13
+    num1:
+    leaq _str01(%rip), %rdi # Set arg 1
+    movq %r13, %rsi
+    call _printf
+  
+    # If we have done 12 days, we exit
+    cmp $12, %r12
+    jz done
+
+    # Did not exit, add newline
+    skip_line:
+    leaq _skip_line(%rip), %rdi
+    call _printf
+    jmp start_loop
+   
+    done:
     leave
     ret
