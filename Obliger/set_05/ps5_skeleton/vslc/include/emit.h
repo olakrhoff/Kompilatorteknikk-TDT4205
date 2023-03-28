@@ -27,6 +27,7 @@
 #define EMIT(fmt, ...) printf("\t" fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 
 #define MOVQ(src,dst)     EMIT("movq %s, %s", (src), (dst))
+#define LEAQ(src,dst)     EMIT("leaq %s(%%rip), %s", (src), (dst))
 #define PUSHQ(src)        EMIT("pushq %s", (src))
 #define POPQ(src)         EMIT("popq %s", (src))
 

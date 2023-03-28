@@ -44,7 +44,7 @@ void generate_program(void)
     for (int i = 0; i < global_symbols->n_symbols; ++i)
         if (global_symbols->symbols[i]->type == SYMBOL_FUNCTION)
         {
-            //generate_main(global_symbols->symbols[i]);
+            generate_main(global_symbols->symbols[i]);
             break;
         }
 }
@@ -77,11 +77,12 @@ static void generate_global_variables(void)
     DIRECTIVE(".align 8");
     for (int i = 0; i < global_symbols->n_symbols; ++i)
     {
-        if (global_symbols->symbols[i]->type != SYMBOL_GLOBAL_ARRAY && global_symbols->symbols[i]->type != SYMBOL_GLOBAL_VAR)
+        if (global_symbols->symbols[i]->type != SYMBOL_GLOBAL_ARRAY &&
+            global_symbols->symbols[i]->type != SYMBOL_GLOBAL_VAR)
             continue; // Only handle global variables (and arrays) here.
         int32_t array_length = 1;
         if (global_symbols->symbols[i]->type == SYMBOL_GLOBAL_ARRAY)
-            array_length = *(int32_t*)global_symbols->symbols[i]->node->children[1]->data; //Get array length
+            array_length = *(int32_t *) global_symbols->symbols[i]->node->children[1]->data; //Get array length
         DIRECTIVE(".%s:\t.zero %d", global_symbols->symbols[i]->name, 8 * array_length);
     }
 }
@@ -89,10 +90,13 @@ static void generate_global_variables(void)
 /* Prints the entry point. preable, statements and epilouge of the given function */
 static void generate_function(symbol_t *function)
 {
-    if (strcmp(function->name, "main") == 0)
-        return;
     // TODO: 2.3
     // TODO: 2.3.1 Do the prologue, including call frame building and parameter pushing
+    if (strcmp(function->name, "main") == 0)
+    {
+        function->name = realloc(function->name, 6);
+        memcpy(function->name, "start", 6);
+    }
     LABEL("_%s", function->name);
     
     PUSHQ(RBP); //Push the base pointer
@@ -131,20 +135,100 @@ static void generate_function(symbol_t *function)
     
     //For each local variable, element in the declaration list, push a space on the stack
     for (int i = 0; i < function->node->children[1]->n_children; ++i)
-        PUSHQ("$0");
+    PUSHQ("$0");
     
-        
+    
     
     // TODO: 2.4 the function body can be sent to generate_statement()
     generate_statement(function->node->children[2]); // generate the function body from the outer block
+    
+    
+    
     // TODO: 2.3.2
     MOVQ(RBP, RSP); //Reset the stack pointer to the callers
     POPQ(RBP); //Reset the callers base pointer
+    RET;
 }
 
 static void generate_function_call(node_t *call)
 {
     // TODO 2.4.3
+    //Here we need to set up the function call
+    //First we must load the parameters into it's given registers
+    node_t *parameters = call->children[1];
+    uint64_t num_params = parameters->n_children;
+    if (num_params > 6)
+    {
+        for (uint64_t i = parameters->n_children - 1; i >= 6; --i)
+        {
+            //TODO: Push the excess parameters to the stack
+        }
+    }
+    
+    //Add the first (max 6) parameters to their designated registers.
+    for (int i = 0; i < num_params && i < 6; ++i)
+    {
+        //The parameters to the function can be of three types:
+        //LOCAL VAR, GLOBAL VAR, and PARAMETER
+        if (parameters->children[i]->type == NUMBER_DATA)
+        {
+        
+        }
+        else
+        {
+            switch (parameters->children[i]->symbol->type)
+            {
+                case SYMBOL_LOCAL_VAR:
+                    break;
+                case SYMBOL_PARAMETER:
+                {
+                    //Extract the stack place of the first argument
+                    uint64_t seq_num = parameters->children[0]->symbol->sequence_number;
+                    int offset = (1 + seq_num) * 8;
+                    char *source = malloc(9 * sizeof(char)); //TODO: Ensure this is cleaned up
+                    memcpy(source, "-8(%rbp)", 9); //TODO: This is gonna fail for other arguments
+                    source[1] = (char) (offset + '0');
+                    MOVQ(source, RAX);
+                }
+                break;
+                case SYMBOL_GLOBAL_VAR:
+                    break;
+                case SYMBOL_GLOBAL_ARRAY:
+                    exit(10); //TODO: Might be a GLOBAL ARRAY as well, figure this out
+                    break;
+                    default:
+                        printf("Parameter (symbol) type not recognised");
+                        exit(9);
+            }
+        }
+        //Then we move the value into it's respective register
+        switch (i)
+        {
+            case 0:
+            MOVQ(RAX, RDI);
+                break;
+            case 1:
+            MOVQ(RAX, RSI);
+                break;
+            case 2:
+            MOVQ(RAX, RDX);
+                break;
+            case 3:
+            MOVQ(RAX, RCX);
+                break;
+            case 4:
+            MOVQ(RAX, R8);
+                break;
+            case 5:
+            MOVQ(RAX, R9);
+                break;
+            default:
+                printf("This is bad, should not loop more than the 6 first params");
+                exit(11);
+        }
+    }
+    //Now the function frame has been sat up for the call, we then call the function
+    EMIT("call _%s", (char *) call->children[0]->data);
     
 }
 
@@ -154,31 +238,118 @@ static void generate_expression(node_t *expression)
     switch (expression->type)
     {
         case NUMBER_DATA:
-            EMIT("movq $%d, %s", *(int32_t*)expression->data, RAX);
+            EMIT("movq $%d, %s", *(int32_t *) expression->data, RAX);
             PUSHQ(RAX);
             break;
         case IDENTIFIER_DATA:
             
             break;
         case ARRAY_INDEXING:
+        {
+            node_t *identifier = expression->children[0];
+            node_t *index = expression->children[1];
+            //Evaluate the index
+            generate_expression(index);
+            POPQ(R10); //Index
+            //Load the base address of the array into R11
+            EMIT("leaq .%s(%%rip), %s", identifier->symbol->name, R11);
             
-            break;
-        case EXPRESSION:
-            generate_expression(expression->children[0]); // Left side
-            generate_expression(expression->children[1]); // Right side
-            POPQ(R10);
-            POPQ(RAX);
-            switch (*(char *)expression->data)
-            {
-                //TODO: Fill this out
-                case '+':
-                    ADDQ(R10, RAX);
-                    break;
-                case '*':
-                    IMULQ(R10, RAX);
-                    break;
-            }
+            EMIT("movq (%s, %s, 8), %s", R11, R10, RAX);
             PUSHQ(RAX);
+            return;
+        }
+        case EXPRESSION:
+            /*
+                expression -> expression ’+’ expression
+                | expression ’-’ expression
+                | expression ’*’ expression
+                | expression ’/’ expression
+                | ’-’ expression
+                | ’(’ expression ’)’
+                | number
+                | identifier
+                | array_indexing
+                | identifier ’(’ argument_list ’)’
+                
+                argument_list -> expression_list
+                | ε
+                
+                expression_list -> expression
+                | expression_list ’,’ expression
+             */
+            if (expression->n_children == 1)
+            {
+                if (expression->children[0]->type == EXPRESSION)
+                {
+                    /*
+                        | ’-’ expression
+                        | ’(’ expression ’)’
+                     */
+                    generate_expression(expression->children[0]);
+                    if (*(char *) expression->data == '-') //Multiply the evaluated expression with minus one
+                    {
+                        MOVQ("$-1", R10);
+                        POPQ(RAX);
+                        IMULQ(R10, RAX);
+                        PUSHQ(RAX);
+                    }
+                }
+                else
+                {
+                    /*
+                        | number
+                        | identifier
+                        | array_indexing
+                     */
+                    generate_expression(expression->children[0]);
+                }
+            }
+            else //Two arguments
+            {
+                /*
+                    expression -> expression ’+’ expression
+                    | expression ’-’ expression
+                    | expression ’*’ expression
+                    | expression ’/’ expression
+                 */
+                if (expression->children[0]->type != IDENTIFIER_DATA && expression->children[1]->type != ARGUMENT_LIST)
+                {
+                    generate_expression(expression->children[0]); // Left side
+                    generate_expression(expression->children[1]); // Right side
+                    POPQ(R10);
+                    POPQ(RAX);
+                    switch (*(char *) expression->data)
+                    {
+                        //TODO: Fill this out
+                        case '+':
+                        ADDQ(R10, RAX);
+                            break;
+                        case '-':
+                        SUBQ(R10, RAX);
+                            break;
+                        case '*':
+                        IMULQ(R10, RAX);
+                            break;
+                        case '/':
+                        IDIVQ(R10); //TODO: Check if this is correct, weird that it does not take two args
+                            break;
+                        default:
+                            printf("Not recognised operator for expression");
+                            exit(7);
+                    }
+                    PUSHQ(RAX);
+                }
+                else
+                {
+                    //I Think this is a function call
+                    //identifier: function name
+                    //argument_list: parameters
+                    /*
+                        | identifier ’(’ argument_list ’)’
+                     */
+                    generate_function_call(expression);
+                }
+            }
             break;
         default:
             printf("generate_expression failed\n");
@@ -192,17 +363,23 @@ static void generate_assignment_statement(node_t *statement)
     // TODO: 2.4.2
     // Right-hand side is always an expression
     generate_expression(statement->children[1]); //Should leave the return value on top of the stack
-    POPQ(RAX); // Value from expression
-    
     
     if (statement->children[0]->type == ARRAY_INDEXING)
     {
+        //Evaluate the index
+        generate_expression(statement->children[0]->children[1]);
+        POPQ(R10); //Index
+        POPQ(RAX); //Right-hand value
+        //Load the base address of the array into R11
+        EMIT("leaq .%s(%%rip), %s", statement->children[0]->children[0]->symbol->name, R11);
     
+        EMIT("movq %s, (%s, %s, 8)", RAX, R11, R10);
+        return;
     }
     else if (statement->children[0]->type == IDENTIFIER_DATA)
     {
         if (statement->children[0]->symbol->type == SYMBOL_GLOBAL_VAR)
-            MOVQ(RAX, statement->children[0]->symbol->name);
+        MOVQ(RAX, statement->children[0]->symbol->name);
         else if (statement->children[0]->symbol->type == SYMBOL_LOCAL_VAR)
         {
         
@@ -218,7 +395,53 @@ static void generate_assignment_statement(node_t *statement)
 static void generate_print_statement(node_t *statement)
 {
     // TODO: 2.4.4
-    
+    for (int i = 0; i < statement->n_children; ++i)
+    {
+        switch (statement->children[i]->type)
+        {
+            case STRING_DATA:
+            {
+                EMIT("leaq string%d(%%rip), %s", (int) *(uint64_t *) statement->children[i]->data, RDI);
+                MOVQ("$0", RSI);
+            }
+                break;
+            case ARRAY_INDEXING:
+            {
+                //array_indexing -> identifier ’[’ expression ’]’
+                generate_expression(statement->children[i]);
+                POPQ(RAX); //Value of expression
+                
+                LEAQ("intout", RDI);
+                MOVQ(RAX, RSI);
+            }
+                break;
+            case IDENTIFIER_DATA:
+            {
+                generate_expression(statement->children[i]);
+                POPQ(RAX); //Value of expression
+                
+                LEAQ("intout", RDI);
+                MOVQ(RAX, RSI);
+            }
+            break;
+            case EXPRESSION:
+            {
+                generate_expression(statement->children[i]);
+                POPQ(RAX); //Value of expression
+                
+                LEAQ("intout", RDI);
+                MOVQ(RAX, RSI);
+            }
+                break;
+            default:
+                printf("Invalid print statement item: (%d) %s", statement->children[i]->type, SYMBOL_TYPE_NAMES[statement->children[i]->type]);
+                exit(15);
+        }
+        
+        
+        MOVQ("$0", RAX);
+        EMIT("call _printf");
+    }
 }
 
 static void generate_return_statement(node_t *statement)
@@ -233,11 +456,17 @@ static void generate_statement(node_t *node)
     // TODO: 2.4
     switch (node->type)
     {
+        //block -> BEGIN declaration_list statement_list END | BEGIN statement_list END
         case BLOCK:
+        {
+            int index = 0;
+            if (node->n_children == 1)
+                goto no_declaration_list;
+            
             //There could be new local variables, push space to the stack
             if (node->children[0]->type != DECLARATION_LIST)
                 exit(3); // Should be
-                
+            
             //Add all new local variables in the scope of the block
             for (int declaration = 0; declaration < node->children[0]->n_children; ++declaration)
             {
@@ -246,13 +475,18 @@ static void generate_statement(node_t *node)
                     PUSHQ("$0"); //Push space for each local variable on the stack
                 }
             }
-            
-            //There should be a statment list
-            if (node->children[1]->type != STATEMENT_LIST)
+            index = 1; // If we had a declaration list then the statement list is on index 1 not 0
+            no_declaration_list:
+            //There should be a statement list
+            if (node->children[index]->type != STATEMENT_LIST)
                 exit(4); // Should be
             
-            for (int i = 1; i < node->children[1]->n_children; ++i)
-                generate_statement(node->children[i]);
+            //statement_list -> statement | statement_list statement, after folding we have a statement_list node with only statements as children
+            for (int i = 0; i < node->children[index]->n_children; ++i)
+                generate_statement(node->children[index]->children[i]);
+            
+            if (node->n_children == 1) //If we did not have a declaration list we are done
+                return;
             
             //After all recursive calls have been made, we leave the block scope, hence we pop the local variables
             for (int declaration = 0; declaration < node->children[0]->n_children; ++declaration)
@@ -262,6 +496,7 @@ static void generate_statement(node_t *node)
                     POPQ("%R10"); //Push space for each local variable on the stack
                 }
             }
+        }
             break;
         case ASSIGNMENT_STATEMENT:
             generate_assignment_statement(node);
@@ -271,16 +506,6 @@ static void generate_statement(node_t *node)
             break;
         case RETURN_STATEMENT:
             break;
-        /*case STATEMENT_LIST:
-            for (int i = 0; i < node->n_children; ++i)
-                generate_statement(node->children[i]);
-            break;*/
-        /*case DECLARATION_LIST:
-            if (node->n_children != 1 || node->children[0]->type == DECLARATION)
-                exit(3); // This is bad, should not happen, but to be safe and ensure my sanity I exit here
-            for (int i = 0; i < node->children[0]->n_children; ++i)
-                PUSHQ("$0"); // Adding new local variables in the scope.
-            break;*/
         default:
             printf("There is a case not handled in: generate_statement\n");
             exit(2); // Not handled, panic
@@ -291,8 +516,8 @@ static void generate_statement(node_t *node)
 static void generate_main(symbol_t *first)
 {
     // Make the globally available main function
-    DIRECTIVE (".globl main");
-    LABEL ("main");
+    DIRECTIVE (".globl _main");
+    LABEL ("_main");
     
     // Save old base pointer, and set new base pointer
     PUSHQ(RBP);
@@ -303,6 +528,7 @@ static void generate_main(symbol_t *first)
     const char *argv = RSI;
     
     const size_t expected_args = FUNC_PARAM_COUNT(first);
+    
     
     SUBQ("$1", argc); // argc counts the name of the binary, so subtract that
     EMIT("cmpq $%ld, %s", expected_args, argc);
@@ -343,14 +569,14 @@ static void generate_main(symbol_t *first)
     
     skip_args:
 
-EMIT ("call .%s", first->name);
+EMIT ("call _%s", first->name);
     MOVQ (RAX, RDI); // Move the return value of the function into RDI
-    EMIT ("call exit"); // Exit with the return value as exit code
+    EMIT ("call _exit"); // Exit with the return value as exit code
     
     LABEL ("ABORT"); // In case of incorrect number of arguments
-    MOVQ ("$errout", RDI);
-    EMIT ("call puts"); // print the errout string
+    LEAQ ("errout", RDI);
+    EMIT ("call _puts"); // print the errout string
     MOVQ ("$1", RDI);
-    EMIT ("call exit"); // Exit with return code 1
+    EMIT ("call _exit"); // Exit with return code 1
     
 }

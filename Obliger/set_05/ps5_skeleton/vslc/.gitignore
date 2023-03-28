@@ -8,7 +8,12 @@ y.tab.h
 scanner.c
 parser.c
 vslc
+helloworld
+arrays
+locals
 
+
+*.dSYM
 *.ast
 *.svg
 *.symbols
