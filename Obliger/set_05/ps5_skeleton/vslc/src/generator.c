@@ -142,7 +142,12 @@ static void generate_function(symbol_t *function)
     // TODO: 2.4 the function body can be sent to generate_statement()
     generate_statement(function->node->children[2]); // generate the function body from the outer block
     
-    
+    node_t *block = function->node->children[2];
+    node_t *statement_list = block->children[block->n_children - 1];
+    node_t *would_be_return = statement_list->children[statement_list->n_children - 1];
+    //If we do not have a return statement in the function, set RAX to zero.
+    if (would_be_return->type != RETURN_STATEMENT)
+        MOVQ("$0", RAX);
     
     // TODO: 2.3.2
     MOVQ(RBP, RSP); //Reset the stack pointer to the callers
@@ -239,10 +244,12 @@ static void generate_expression(node_t *expression)
     {
         case NUMBER_DATA:
             EMIT("movq $%d, %s", *(int32_t *) expression->data, RAX);
-            PUSHQ(RAX);
             break;
         case IDENTIFIER_DATA:
-            
+        {
+            //TODO: Handle non-globals
+            EMIT("movq .%s(%%rip), %s", expression->symbol->name, RAX);
+        }
             break;
         case ARRAY_INDEXING:
         {
@@ -250,12 +257,11 @@ static void generate_expression(node_t *expression)
             node_t *index = expression->children[1];
             //Evaluate the index
             generate_expression(index);
-            POPQ(R10); //Index
+            MOVQ(RAX, R10); //Index
             //Load the base address of the array into R11
             EMIT("leaq .%s(%%rip), %s", identifier->symbol->name, R11);
             
             EMIT("movq (%s, %s, 8), %s", R11, R10, RAX);
-            PUSHQ(RAX);
             return;
         }
         case EXPRESSION:
@@ -289,9 +295,7 @@ static void generate_expression(node_t *expression)
                     if (*(char *) expression->data == '-') //Multiply the evaluated expression with minus one
                     {
                         MOVQ("$-1", R10);
-                        POPQ(RAX);
                         IMULQ(R10, RAX);
-                        PUSHQ(RAX);
                     }
                 }
                 else
@@ -315,8 +319,9 @@ static void generate_expression(node_t *expression)
                 if (expression->children[0]->type != IDENTIFIER_DATA && expression->children[1]->type != ARGUMENT_LIST)
                 {
                     generate_expression(expression->children[0]); // Left side
+                    PUSHQ(RAX);
                     generate_expression(expression->children[1]); // Right side
-                    POPQ(R10);
+                    MOVQ(RAX, R10);
                     POPQ(RAX);
                     switch (*(char *) expression->data)
                     {
@@ -337,7 +342,6 @@ static void generate_expression(node_t *expression)
                             printf("Not recognised operator for expression");
                             exit(7);
                     }
-                    PUSHQ(RAX);
                 }
                 else
                 {
@@ -363,12 +367,12 @@ static void generate_assignment_statement(node_t *statement)
     // TODO: 2.4.2
     // Right-hand side is always an expression
     generate_expression(statement->children[1]); //Should leave the return value on top of the stack
-    
+    PUSHQ(RAX); //Save result
     if (statement->children[0]->type == ARRAY_INDEXING)
     {
         //Evaluate the index
         generate_expression(statement->children[0]->children[1]);
-        POPQ(R10); //Index
+        MOVQ(RAX, R10); //Index
         POPQ(RAX); //Right-hand value
         //Load the base address of the array into R11
         EMIT("leaq .%s(%%rip), %s", statement->children[0]->children[0]->symbol->name, R11);
@@ -379,14 +383,17 @@ static void generate_assignment_statement(node_t *statement)
     else if (statement->children[0]->type == IDENTIFIER_DATA)
     {
         if (statement->children[0]->symbol->type == SYMBOL_GLOBAL_VAR)
-        MOVQ(RAX, statement->children[0]->symbol->name);
+        {
+            POPQ(RAX);
+            EMIT("movq %s, .%s(%%rip)", RAX, statement->children[0]->symbol->name);
+        }
         else if (statement->children[0]->symbol->type == SYMBOL_LOCAL_VAR)
         {
-        
+            exit(123);
         }
         else if (statement->children[0]->symbol->type == SYMBOL_PARAMETER)
         {
-        
+            exit(124);
         }
         
     }
@@ -409,7 +416,7 @@ static void generate_print_statement(node_t *statement)
             {
                 //array_indexing -> identifier ’[’ expression ’]’
                 generate_expression(statement->children[i]);
-                POPQ(RAX); //Value of expression
+                //Value of expression in RAX
                 
                 LEAQ("intout", RDI);
                 MOVQ(RAX, RSI);
@@ -418,7 +425,7 @@ static void generate_print_statement(node_t *statement)
             case IDENTIFIER_DATA:
             {
                 generate_expression(statement->children[i]);
-                POPQ(RAX); //Value of expression
+                //Value of expression in RAX
                 
                 LEAQ("intout", RDI);
                 MOVQ(RAX, RSI);
@@ -427,7 +434,7 @@ static void generate_print_statement(node_t *statement)
             case EXPRESSION:
             {
                 generate_expression(statement->children[i]);
-                POPQ(RAX); //Value of expression
+                //Value of expression in RAX
                 
                 LEAQ("intout", RDI);
                 MOVQ(RAX, RSI);
