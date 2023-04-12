@@ -20,6 +20,10 @@ static void generate_statement(node_t *node);
 
 static void generate_main(symbol_t *first);
 
+static void generate_safe_print(void);
+
+symbol_t *current_global_func;
+
 /* Entry point for code generation */
 void generate_program(void)
 {
@@ -47,6 +51,9 @@ void generate_program(void)
             generate_main(global_symbols->symbols[i]);
             break;
         }
+    
+    //Add safe print
+    generate_safe_print();
 }
 
 /* Prints one .asciz entry for each string in the global string_list */
@@ -92,6 +99,7 @@ static void generate_function(symbol_t *function)
 {
     // TODO: 2.3
     // TODO: 2.3.1 Do the prologue, including call frame building and parameter pushing
+    current_global_func = function;
     if (strcmp(function->name, "main") == 0)
     {
         function->name = realloc(function->name, 6);
@@ -247,8 +255,21 @@ static void generate_expression(node_t *expression)
             break;
         case IDENTIFIER_DATA:
         {
-            //TODO: Handle non-globals
-            EMIT("movq .%s(%%rip), %s", expression->symbol->name, RAX);
+            if (expression->symbol->type == SYMBOL_GLOBAL_VAR)
+            {
+                EMIT("movq .%s(%s), %s", expression->symbol->name, RIP, RAX);
+            }
+            else if (expression->symbol->type == SYMBOL_LOCAL_VAR)
+            {
+                //Move value into stack at base pointer plus sequence number
+                int num_params = FUNC_PARAM_COUNT(current_global_func);
+                int offset = (num_params + expression->symbol->sequence_number + 1) * -8;
+                EMIT("movq %d(%s), %s", offset, RBP, RAX);
+            }
+            else if (expression->symbol->type == SYMBOL_PARAMETER)
+            {
+                exit(124);
+            }
         }
             break;
         case ARRAY_INDEXING:
@@ -389,7 +410,11 @@ static void generate_assignment_statement(node_t *statement)
         }
         else if (statement->children[0]->symbol->type == SYMBOL_LOCAL_VAR)
         {
-            exit(123);
+            //Move value into stack at base pointer plus sequence number
+            int num_params = FUNC_PARAM_COUNT(current_global_func);
+            int offset = (num_params + statement->children[0]->symbol->sequence_number + 1) * -8;
+            POPQ(RAX);
+            EMIT("movq %s, %d(%s)", RAX, offset, RBP);
         }
         else if (statement->children[0]->symbol->type == SYMBOL_PARAMETER)
         {
@@ -447,7 +472,7 @@ static void generate_print_statement(node_t *statement)
         
         
         MOVQ("$0", RAX);
-        EMIT("call _printf");
+        EMIT("call _safe_printf");
     }
 }
 
@@ -466,6 +491,7 @@ static void generate_statement(node_t *node)
         //block -> BEGIN declaration_list statement_list END | BEGIN statement_list END
         case BLOCK:
         {
+            
             int index = 0;
             if (node->n_children == 1)
                 goto no_declaration_list;
@@ -586,4 +612,16 @@ EMIT ("call _%s", first->name);
     MOVQ ("$1", RDI);
     EMIT ("call _exit"); // Exit with return code 1
     
+}
+
+static void generate_safe_print()
+{
+    LABEL("_safe_printf");
+    PUSHQ(RBP);
+    MOVQ(RSP, RBP);
+    EMIT("andq $-16, %s", RSP);
+    EMIT("call _printf");
+    MOVQ(RBP, RSP);
+    POPQ(RBP);
+    RET;
 }
