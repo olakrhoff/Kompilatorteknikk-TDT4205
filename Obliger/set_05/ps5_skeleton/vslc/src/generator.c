@@ -142,8 +142,8 @@ static void generate_function(symbol_t *function)
     }
     
     //For each local variable, element in the declaration list, push a space on the stack
-    for (int i = 0; i < function->node->children[1]->n_children; ++i)
-    PUSHQ("$0");
+    //for (int i = 0; i < function->node->children[1]->n_children; ++i)
+    //PUSHQ("$0");
     
     
     
@@ -155,8 +155,9 @@ static void generate_function(symbol_t *function)
     node_t *would_be_return = statement_list->children[statement_list->n_children - 1];
     //If we do not have a return statement in the function, set RAX to zero.
     if (would_be_return->type != RETURN_STATEMENT)
-        MOVQ("$0", RAX);
+    MOVQ("$0", RAX);
     
+    //generate_return_statement(function->node->children[3]);
     // TODO: 2.3.2
     MOVQ(RBP, RSP); //Reset the stack pointer to the callers
     POPQ(RBP); //Reset the callers base pointer
@@ -174,7 +175,44 @@ static void generate_function_call(node_t *call)
     {
         for (uint64_t i = parameters->n_children - 1; i >= 6; --i)
         {
-            //TODO: Push the excess parameters to the stack
+            //The parameters to the function can be of three types:
+            //LOCAL VAR, GLOBAL VAR, and PARAMETER
+            if (parameters->children[i]->type == NUMBER_DATA)
+            {
+                exit(326);
+            }
+            else
+            {
+                switch (parameters->children[i]->symbol->type)
+                {
+                    case SYMBOL_LOCAL_VAR:
+                        exit(105);
+                        break;
+                    case SYMBOL_PARAMETER:
+                    {
+                        //Extract the stack place of the first argument
+                        int offset;
+                        uint64_t seq_num = parameters->children[i]->symbol->sequence_number;
+                        if (seq_num < 6)
+                            offset = (1 + seq_num) * -8;
+                        else
+                            offset = (1 + seq_num - 5) * 8;
+                        EMIT("movq %d(%s), %s", offset, RBP, RAX);
+                    }
+                        break;
+                    case SYMBOL_GLOBAL_VAR:
+                        exit(104);
+                        break;
+                    case SYMBOL_GLOBAL_ARRAY:
+                        exit(15); //TODO: Might be a GLOBAL ARRAY as well, figure this out
+                        break;
+                    default:
+                        printf("Parameter (symbol) type not recognised");
+                        exit(9);
+                }
+            }
+            //Then we push the value onto the stack
+            PUSHQ(RAX);
         }
     }
     
@@ -185,33 +223,36 @@ static void generate_function_call(node_t *call)
         //LOCAL VAR, GLOBAL VAR, and PARAMETER
         if (parameters->children[i]->type == NUMBER_DATA)
         {
-        
+            exit(321);
         }
         else
         {
             switch (parameters->children[i]->symbol->type)
             {
                 case SYMBOL_LOCAL_VAR:
+                    exit(100);
                     break;
                 case SYMBOL_PARAMETER:
                 {
                     //Extract the stack place of the first argument
-                    uint64_t seq_num = parameters->children[0]->symbol->sequence_number;
-                    int offset = (1 + seq_num) * 8;
-                    char *source = malloc(9 * sizeof(char)); //TODO: Ensure this is cleaned up
-                    memcpy(source, "-8(%rbp)", 9); //TODO: This is gonna fail for other arguments
-                    source[1] = (char) (offset + '0');
-                    MOVQ(source, RAX);
+                    int offset;
+                    uint64_t seq_num = parameters->children[i]->symbol->sequence_number;
+                    if (seq_num < 6)
+                        offset = (1 + seq_num) * -8;
+                    else
+                        offset = (1 + seq_num - 5) * 8;
+                    EMIT("movq %d(%s), %s", offset, RBP, RAX);
                 }
-                break;
+                    break;
                 case SYMBOL_GLOBAL_VAR:
+                    exit(99);
                     break;
                 case SYMBOL_GLOBAL_ARRAY:
                     exit(10); //TODO: Might be a GLOBAL ARRAY as well, figure this out
                     break;
-                    default:
-                        printf("Parameter (symbol) type not recognised");
-                        exit(9);
+                default:
+                    printf("Parameter (symbol) type not recognised");
+                    exit(9);
             }
         }
         //Then we move the value into it's respective register
@@ -242,7 +283,6 @@ static void generate_function_call(node_t *call)
     }
     //Now the function frame has been sat up for the call, we then call the function
     EMIT("call _%s", (char *) call->children[0]->data);
-    
 }
 
 static void generate_expression(node_t *expression)
@@ -251,7 +291,7 @@ static void generate_expression(node_t *expression)
     switch (expression->type)
     {
         case NUMBER_DATA:
-            EMIT("movq $%d, %s", *(int32_t *) expression->data, RAX);
+        EMIT("movq $%d, %s", *(int32_t *) expression->data, RAX);
             break;
         case IDENTIFIER_DATA:
         {
@@ -262,13 +302,20 @@ static void generate_expression(node_t *expression)
             else if (expression->symbol->type == SYMBOL_LOCAL_VAR)
             {
                 //Move value into stack at base pointer plus sequence number
-                int num_params = FUNC_PARAM_COUNT(current_global_func);
-                int offset = (num_params + expression->symbol->sequence_number + 1) * -8;
+                //int num_params = FUNC_PARAM_COUNT(current_global_func);
+                int offset = (expression->symbol->sequence_number + 1) * -8;
                 EMIT("movq %d(%s), %s", offset, RBP, RAX);
             }
             else if (expression->symbol->type == SYMBOL_PARAMETER)
             {
-                exit(124);
+                //Move value into stack at base pointer plus sequence number
+                int offset;
+                uint64_t seq_num = expression->symbol->sequence_number;
+                if (seq_num < 6)
+                    offset = (1 + seq_num) * -8;
+                else
+                    offset = (1 + seq_num - 5) * 8;
+                EMIT("movq %d(%s), %s", offset, RBP, RAX);
             }
         }
             break;
@@ -306,27 +353,18 @@ static void generate_expression(node_t *expression)
              */
             if (expression->n_children == 1)
             {
-                if (expression->children[0]->type == EXPRESSION)
+                /*
+                    | ’-’ expression
+                    | ’(’ expression ’)’
+                    | number
+                    | identifier
+                    | array_indexing
+                 */
+                generate_expression(expression->children[0]);
+                if (*(char *) expression->data == '-') //Multiply the evaluated expression with minus one
                 {
-                    /*
-                        | ’-’ expression
-                        | ’(’ expression ’)’
-                     */
-                    generate_expression(expression->children[0]);
-                    if (*(char *) expression->data == '-') //Multiply the evaluated expression with minus one
-                    {
-                        MOVQ("$-1", R10);
-                        IMULQ(R10, RAX);
-                    }
-                }
-                else
-                {
-                    /*
-                        | number
-                        | identifier
-                        | array_indexing
-                     */
-                    generate_expression(expression->children[0]);
+                    MOVQ("$-1", R10);
+                    IMULQ(R10, RAX);
                 }
             }
             else //Two arguments
@@ -337,7 +375,7 @@ static void generate_expression(node_t *expression)
                     | expression ’*’ expression
                     | expression ’/’ expression
                  */
-                if (expression->children[0]->type != IDENTIFIER_DATA && expression->children[1]->type != ARGUMENT_LIST)
+                if (expression->children[1]->type != ARGUMENT_LIST)
                 {
                     generate_expression(expression->children[0]); // Left side
                     PUSHQ(RAX);
@@ -378,7 +416,7 @@ static void generate_expression(node_t *expression)
             break;
         default:
             printf("generate_expression failed\n");
-            exit(4);
+            exit(41);
     }
     
 }
@@ -397,7 +435,7 @@ static void generate_assignment_statement(node_t *statement)
         POPQ(RAX); //Right-hand value
         //Load the base address of the array into R11
         EMIT("leaq .%s(%%rip), %s", statement->children[0]->children[0]->symbol->name, R11);
-    
+        
         EMIT("movq %s, (%s, %s, 8)", RAX, R11, R10);
         return;
     }
@@ -411,14 +449,15 @@ static void generate_assignment_statement(node_t *statement)
         else if (statement->children[0]->symbol->type == SYMBOL_LOCAL_VAR)
         {
             //Move value into stack at base pointer plus sequence number
-            int num_params = FUNC_PARAM_COUNT(current_global_func);
-            int offset = (num_params + statement->children[0]->symbol->sequence_number + 1) * -8;
+            //int num_params = FUNC_PARAM_COUNT(current_global_func);
+            
+            int offset = (statement->children[0]->symbol->sequence_number + 1) * -8;
             POPQ(RAX);
             EMIT("movq %s, %d(%s)", RAX, offset, RBP);
         }
         else if (statement->children[0]->symbol->type == SYMBOL_PARAMETER)
         {
-            exit(124);
+            exit(129);
         }
         
     }
@@ -455,7 +494,7 @@ static void generate_print_statement(node_t *statement)
                 LEAQ("intout", RDI);
                 MOVQ(RAX, RSI);
             }
-            break;
+                break;
             case EXPRESSION:
             {
                 generate_expression(statement->children[i]);
@@ -466,7 +505,8 @@ static void generate_print_statement(node_t *statement)
             }
                 break;
             default:
-                printf("Invalid print statement item: (%d) %s", statement->children[i]->type, SYMBOL_TYPE_NAMES[statement->children[i]->type]);
+                printf("Invalid print statement item: (%d) %s", statement->children[i]->type,
+                       SYMBOL_TYPE_NAMES[statement->children[i]->type]);
                 exit(15);
         }
         
@@ -479,7 +519,20 @@ static void generate_print_statement(node_t *statement)
 static void generate_return_statement(node_t *statement)
 {
     // TODO: 2.4.5 Store the value in %rax and jump to the function epilogue
-    
+    switch (statement->children[0]->type)
+    {
+        case EXPRESSION:
+            generate_expression(statement->children[0]);
+            break;
+        case IDENTIFIER_DATA:
+            generate_expression(statement->children[0]);
+            break;
+        case NUMBER_DATA:
+            generate_expression(statement->children[0]);
+            break;
+        default:
+            exit(42);
+    }
 }
 
 /* Recursively generate the given statement node, and all sub-statements. */
@@ -538,6 +591,7 @@ static void generate_statement(node_t *node)
             generate_print_statement(node);
             break;
         case RETURN_STATEMENT:
+            generate_return_statement(node);
             break;
         default:
             printf("There is a case not handled in: generate_statement\n");
@@ -586,7 +640,7 @@ static void generate_main(symbol_t *first)
     EMIT ("movq (%s), %s", argv, RDI); // 1st argument, the char *
     MOVQ ("$0", RSI); // 2nd argument, a null pointer
     MOVQ ("$10", RDX); //3rd argument, we want base 10
-    EMIT ("call strtol");
+    EMIT ("call _strtol");
     
     // Restore caller saved registers
     POPQ (RCX);

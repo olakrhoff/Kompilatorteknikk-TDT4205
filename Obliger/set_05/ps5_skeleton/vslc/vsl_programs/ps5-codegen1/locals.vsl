@@ -5,13 +5,13 @@
 
 func main() begin
     var a, b, c
-    print "Now, a b c are", a, b, c
+    print "Now, a b c are ", a, b, c
     a := 6
     begin
         var c
         b := 20
         c := 100
-        print "In here, a b c are", a, b, c
+        print "In here, a b c are ", a, b, c
     end
-    print "Out here, a b c are", a, b, c
+    print "Out here, a b c are ", a, b, c
 end
