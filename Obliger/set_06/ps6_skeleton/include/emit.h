@@ -44,8 +44,11 @@
 #define RET               EMIT("ret")
 
 #define CMPQ(op1,op2)     EMIT("cmpq %s, %s", (op1), (op2))
-#define JNE(label)        EMIT("jne %s", (label)) // Conditional jump (not equal)
-#define JMP(label)        EMIT("jmp %s", (label)) // Unconditional jump
+#define JMP(label, code)  EMIT("jmp %s%d", (label), (code))
+#define JGE(label, code)  EMIT("jge %s%d", (label), (code))
+#define JLE(label, code)  EMIT("jle %s%d", (label), (code))
+#define JE(label, code)   EMIT("je %s%d", (label), (code))
+#define JNE(label, code)  EMIT("jne %s%d", (label), (code))
 
 // These directives are set based on platform,
 // allowing the compiler to work on macOS as well

@@ -12,7 +12,7 @@ PS6_ASSEMBLED := $(patsubst %.vsl, %.out, $(wildcard ps6-codegen2/*.vsl))
 
 .PHONY: all ps2 ps2-graphviz ps3 ps3-graphviz ps4 ps5 ps5-assemble ps6 ps6-assemble clean ps2-check
 
-all: ps2 ps3 ps4 ps5 ps6
+all: ps2 ps3 ps4 ps5 ps6 ps6-assemble
 
 ps2: $(PS2_EXAMPLES)
 ps2-graphviz: $(PS2_GRAPHVIZ)
