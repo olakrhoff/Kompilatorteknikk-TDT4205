@@ -9,6 +9,54 @@ static const char *REGISTER_PARAMS[6] = {RDI, RSI, RDX, RCX, R8, R9};
 static int global_if_counter = 0;
 static int global_while_counter = 0;
 
+typedef struct while_stack
+{
+    int *stack;
+    int top;
+    int capacity;
+} while_stack_t;
+
+static while_stack_t *while_stack;
+
+while_stack_t *while_init()
+{
+    while_stack_t *result = malloc(sizeof(while_stack_t));
+    *result = (while_stack_t) {
+        .stack = NULL,
+        .top = 0,
+        .capacity = 0
+    };
+    return result;
+}
+
+void push_while(int code)
+{
+    //If the stack is full, resize the stack
+    if (while_stack->top + 1 >= while_stack->capacity)
+    {
+        while_stack->capacity = while_stack->capacity * 2 + 8;
+        while_stack->stack = realloc(while_stack->stack, while_stack->capacity * sizeof(int));
+    }
+
+    while_stack->stack[while_stack->top] = code;
+    while_stack->top++;
+}
+
+int pop_while()
+{
+    if (while_stack->top == 0)
+        exit(321); //No elements in stack
+        
+    while_stack->top--;
+    return while_stack->stack[while_stack->top];
+}
+
+int peek_while()
+{
+    return while_stack->stack[while_stack->top - 1];
+}
+
+
 // Takes in a symbol of type SYMBOL_FUNCTION, and returns how many parameters the function takes
 #define FUNC_PARAM_COUNT(func) ((func)->node->children[1]->n_children)
 
@@ -29,6 +77,7 @@ void generate_program(void)
 {
     generate_stringtable();
     generate_global_variables();
+    while_stack = while_init();
     
     DIRECTIVE (".text");
     symbol_t *first_function = NULL;
@@ -451,12 +500,14 @@ static void generate_while_statement(node_t *statement)
     const char *start_label = "_WHILE";
     const char *end_label = "_WHILEEND";
     int unique_code = global_while_counter++;
+    push_while(unique_code);
     
     LABEL("%s%d", start_label, unique_code);
     generate_relation(statement->children[0], end_label, unique_code);
     generate_statement(statement->children[1]);
     JMP(start_label, unique_code);
     LABEL("%s%d", end_label, unique_code);
+    pop_while();
 }
 
 static void generate_break_statement()
@@ -464,6 +515,7 @@ static void generate_break_statement()
     // TODO (2.3):
     // Generate the break statement, jumping out past the end of the innermost while loop.
     // You can use a global variable to keep track of the innermost call to generate_while_statement().
+    JMP("_WHILEEND", peek_while());
 }
 
 /* Recursively generate the given statement node, and all sub-statements. */
