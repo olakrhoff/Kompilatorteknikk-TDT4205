@@ -7,6 +7,7 @@
 #define NUM_REGISTER_PARAMS 6
 static const char *REGISTER_PARAMS[6] = {RDI, RSI, RDX, RCX, R8, R9};
 static int global_if_counter = 0;
+static int global_while_counter = 0;
 
 // Takes in a symbol of type SYMBOL_FUNCTION, and returns how many parameters the function takes
 #define FUNC_PARAM_COUNT(func) ((func)->node->children[1]->n_children)
@@ -443,9 +444,19 @@ static void generate_if_statement(node_t *statement)
 static void generate_while_statement(node_t *statement)
 {
     // TODO (2.2):
-    // Implement while loops, similarily to the way if statements were generated.
+    // Implement while loops, similarly to the way if statements were generated.
     // Remember to make label names unique, and to handle nested while loops.
     
+    //while_statement -> WHILE relation DO statement
+    const char *start_label = "_WHILE";
+    const char *end_label = "_WHILEEND";
+    int unique_code = global_while_counter++;
+    
+    LABEL("%s%d", start_label, unique_code);
+    generate_relation(statement->children[0], end_label, unique_code);
+    generate_statement(statement->children[1]);
+    JMP(start_label, unique_code);
+    LABEL("%s%d", end_label, unique_code);
 }
 
 static void generate_break_statement()
