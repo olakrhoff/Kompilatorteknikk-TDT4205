@@ -29,6 +29,15 @@ while_stack_t *while_init()
     return result;
 }
 
+void destroy_while(while_stack_t *stack)
+{
+    if (stack == NULL)
+        return;
+    
+    free(stack->stack);
+    free(stack);
+}
+
 void push_while(int code)
 {
     //If the stack is full, resize the stack
@@ -97,6 +106,7 @@ void generate_program(void)
         exit(EXIT_FAILURE);
     }
     generate_main(first_function);
+    destroy_while(while_stack);
 }
 
 /* Prints one .asciz entry for each string in the global string_list */
