@@ -88,6 +88,7 @@ static void find_globals(void)
                     symbol->name = child->children[j]->data;
                     symbol->type = SYMBOL_GLOBAL_VAR;
                     symbol->node = child->children[j];
+                    symbol->function_symtable = NULL;
                     symbol_table_insert(global_symbols, symbol);
                 }
                 break;
@@ -101,6 +102,7 @@ static void find_globals(void)
                 symbol->name = child->children[0]->data;
                 symbol->type = SYMBOL_GLOBAL_ARRAY;
                 symbol->node = child;
+                symbol->function_symtable = NULL;
                 symbol_table_insert(global_symbols, symbol);
             }
                 break;
